@@ -59,8 +59,9 @@ class FileRearrangerApp:
         self.file_display.bind('<B1-Motion>', self.do_drag)
         self.file_display.bind('<ButtonRelease-1>', self.stop_drag)
 
-    def add_folder(self):
-        folder_path = filedialog.askdirectory()
+    def add_folder(self, folder_path=None):
+        if folder_path is None:
+            folder_path = filedialog.askdirectory()
         if folder_path:
             try:
                 self.file_list = [self.remove_numbering(os.path.join(folder_path, f)) for f in os.listdir(folder_path)]
@@ -86,6 +87,7 @@ class FileRearrangerApp:
     def export_files_to_original_folder(self):
         if hasattr(self, 'original_folder'):
             try:
+                # Copy new files to the original folder
                 for index, file_path in enumerate(self.file_list):
                     filename = f"{index + 1}. {os.path.basename(file_path)}"
                     dest_path = os.path.join(self.original_folder, filename)
@@ -94,18 +96,29 @@ class FileRearrangerApp:
                     dest_path = os.path.normpath(dest_path)
 
                     print(f"Copying from: {file_path} to: {dest_path}")  # Debug print
-                    print(dest_path)
                     if os.path.exists(dest_path):
                         os.remove(dest_path)  # Delete the old file if it exists
 
                     shutil.copy2(file_path, dest_path)
 
+                # Remove old files that are no longer in the list of new files
+                new_files = {os.path.normpath(os.path.join(self.original_folder, f"{index + 1}. {os.path.basename(file_path)}"))
+                             for index, file_path in enumerate(self.file_list)}
+
+                for old_file in os.listdir(self.original_folder):
+                    old_file_path = os.path.normpath(os.path.join(self.original_folder, old_file))
+                    if old_file_path not in new_files:
+                        os.remove(old_file_path)
+
                 messagebox.showinfo("Export Complete", "Files have been exported to the original folder successfully.")
+
+                # Reload the folder
+                self.add_folder(self.original_folder)
+
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export files: {e}")
         else:
             messagebox.showerror("Error", "Original folder path not found.")
-
 
     def on_drop(self, event):
         files = self.root.tk.splitlist(event.data)
@@ -182,7 +195,13 @@ class FileRearrangerApp:
     def remove_numbering(self, file_path):
         filename = os.path.basename(file_path)
         new_filename = re.sub(r'^\d+\.\s*', '', filename)
-        return os.path.join(os.path.dirname(file_path), new_filename)
+        new_path = os.path.join(os.path.dirname(file_path), new_filename)
+
+        # Rename the file in the original folder
+        if file_path != new_path:
+            os.rename(file_path, new_path)
+
+        return new_path
 
 if __name__ == "__main__":
     root = TkinterDnD.Tk()
